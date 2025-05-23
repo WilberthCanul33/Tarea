@@ -10,6 +10,9 @@ COPY gradlew ./
 COPY gradle ./gradle
 COPY src ./src
 
+# Da permisos de ejecución a gradlew
+RUN chmod +x gradlew
+
 # Ejecuta la compilación
 RUN ./gradlew build --no-daemon
 
