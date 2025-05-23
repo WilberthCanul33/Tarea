@@ -5,7 +5,7 @@ FROM openjdk:17-jdk-slim
 WORKDIR /app
 
 # Copia solo los archivos necesarios para construir
-COPY build.gradle settings.gradle ./
+COPY build.gradle ./
 COPY gradlew ./
 COPY gradle ./gradle
 COPY src ./src
