@@ -8,7 +8,8 @@ import java.util.concurrent.*;
 import model.DatabaseConnection;
 
 public class AgricolaServer {
-    private static final int PORT = 5555;
+    // Usar puerto de variable de entorno (Render lo proporciona)
+    private static final int DEFAULT_PORT = 5555;
     private static final int THREAD_POOL_SIZE = 10;
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
@@ -20,9 +21,10 @@ public class AgricolaServer {
 
     public void start() {
         try {
-            serverSocket = new ServerSocket(PORT);
+            int port = Integer.parseInt(System.getenv().getOrDefault("PORT", String.valueOf(DEFAULT_PORT)));
+            serverSocket = new ServerSocket(port);
             running = true;
-            System.out.println("Servidor iniciado en el puerto " + PORT);
+            System.out.println("Servidor iniciado en el puerto " + port);
             
             while (running) {
                 Socket clientSocket = serverSocket.accept();
@@ -56,9 +58,7 @@ public class AgricolaServer {
 
     private static class ClientHandler implements Runnable {
         private Socket clientSocket;
-        private ObjectInputStream input;
-        private ObjectOutputStream output;
-
+        
         public ClientHandler(Socket socket) {
             this.clientSocket = socket;
         }
@@ -66,31 +66,69 @@ public class AgricolaServer {
         @Override
         public void run() {
             try {
-                output = new ObjectOutputStream(clientSocket.getOutputStream());
-                input = new ObjectInputStream(clientSocket.getInputStream());
+                // Buffer para leer los primeros bytes y detectar el protocolo
+                InputStream rawInput = clientSocket.getInputStream();
+                BufferedInputStream bufferedInput = new BufferedInputStream(rawInput);
+                bufferedInput.mark(4); // Marcamos para poder resetear
+                
+                byte[] header = new byte[4];
+                int bytesRead = bufferedInput.read(header);
+                
+                if (bytesRead == 4 && new String(header).equals("HEAD")) {
+                    // Es una petición HTTP HEAD (health check de Render)
+                    handleHttpRequest(bufferedInput);
+                } else {
+                    // Es tu protocolo personalizado
+                    bufferedInput.reset(); // Volvemos al inicio del stream
+                    handleCustomProtocol(bufferedInput);
+                }
+            } catch (IOException e) {
+                System.err.println("Error en el manejador del cliente: " + e.getMessage());
+            } finally {
+                try {
+                    clientSocket.close();
+                } catch (IOException e) {
+                    System.err.println("Error al cerrar conexión: " + e.getMessage());
+                }
+            }
+        }
+
+        private void handleHttpRequest(InputStream input) throws IOException {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(input));
+            OutputStream output = clientSocket.getOutputStream();
+            
+            // Leer toda la petición HTTP (no necesitamos el contenido)
+            while (!reader.readLine().isEmpty()); // Leer hasta línea vacía
+            
+            // Respuesta mínima para health check
+            String response = "HTTP/1.1 200 OK\r\n" +
+                             "Content-Type: text/plain\r\n" +
+                             "Connection: close\r\n" +
+                             "\r\n" +
+                             "OK";
+            
+            output.write(response.getBytes());
+            output.flush();
+            System.out.println("Respondido health check HTTP");
+        }
+
+        private void handleCustomProtocol(InputStream input) {
+            try (ObjectInputStream ois = new ObjectInputStream(input);
+                 ObjectOutputStream oos = new ObjectOutputStream(clientSocket.getOutputStream())) {
                 
                 while (true) {
-                    String request = (String) input.readObject();
-                    System.out.println("Recibido: " + request);
+                    String request = (String) ois.readObject();
+                    System.out.println("Recibido (protocolo personalizado): " + request);
                     
-                    // Procesar la solicitud según el protocolo personalizado
                     String response = processRequest(request);
                     
-                    output.writeObject(response);
-                    output.flush();
+                    oos.writeObject(response);
+                    oos.flush();
                 }
             } catch (EOFException e) {
                 System.out.println("Cliente desconectado: " + clientSocket.getInetAddress());
             } catch (IOException | ClassNotFoundException e) {
-                System.err.println("Error en el manejador del cliente: " + e.getMessage());
-            } finally {
-                try {
-                    if (input != null) input.close();
-                    if (output != null) output.close();
-                    if (clientSocket != null) clientSocket.close();
-                } catch (IOException e) {
-                    System.err.println("Error al cerrar conexiones: " + e.getMessage());
-                }
+                System.err.println("Error en protocolo personalizado: " + e.getMessage());
             }
         }
 
