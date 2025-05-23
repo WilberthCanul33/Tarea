@@ -63,35 +63,40 @@ public class AgricolaServer {
             this.clientSocket = socket;
         }
 
+        
         @Override
-        public void run() {
-            try {
-                // Buffer para leer los primeros bytes y detectar el protocolo
-                InputStream rawInput = clientSocket.getInputStream();
-                BufferedInputStream bufferedInput = new BufferedInputStream(rawInput);
-                bufferedInput.mark(4); // Marcamos para poder resetear
-                
-                byte[] header = new byte[4];
-                int bytesRead = bufferedInput.read(header);
-                
-                if (bytesRead == 4 && new String(header).equals("HEAD")) {
-                    // Es una petición HTTP HEAD (health check de Render)
-                    handleHttpRequest(bufferedInput);
-                } else {
-                    // Es tu protocolo personalizado
-                    bufferedInput.reset(); // Volvemos al inicio del stream
-                    handleCustomProtocol(bufferedInput);
-                }
-            } catch (IOException e) {
-                System.err.println("Error en el manejador del cliente: " + e.getMessage());
-            } finally {
-                try {
-                    clientSocket.close();
-                } catch (IOException e) {
-                    System.err.println("Error al cerrar conexión: " + e.getMessage());
-                }
+public void run() {
+    try {
+        InputStream rawInput = clientSocket.getInputStream();
+        BufferedInputStream bufferedInput = new BufferedInputStream(rawInput);
+        bufferedInput.mark(5); // Marcamos para poder resetear
+        
+        byte[] header = new byte[4];
+        int bytesRead = bufferedInput.read(header);
+        
+        if (bytesRead == 4) {
+            String headerStr = new String(header);
+            if (headerStr.equals("HEAD") || headerStr.startsWith("GET") || 
+                headerStr.startsWith("POST") || headerStr.startsWith("HTTP")) {
+                // Es una petición HTTP
+                handleHttpRequest(bufferedInput);
+                return;
             }
         }
+        
+        // Es tu protocolo personalizado
+        bufferedInput.reset(); // Volvemos al inicio del stream
+        handleCustomProtocol(bufferedInput);
+    } catch (IOException e) {
+        System.err.println("Error en el manejador del cliente: " + e.getMessage());
+    } finally {
+        try {
+            clientSocket.close();
+        } catch (IOException e) {
+            System.err.println("Error al cerrar conexión: " + e.getMessage());
+        }
+    }
+}
 
         private void handleHttpRequest(InputStream input) throws IOException {
             BufferedReader reader = new BufferedReader(new InputStreamReader(input));
