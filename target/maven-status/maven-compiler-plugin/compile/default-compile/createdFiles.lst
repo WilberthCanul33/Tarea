@@ -1,0 +1,17 @@
+model\SaleItem.class
+controller\ProductController.class
+controller\MainController.class
+model\Sale.class
+Main.class
+model\DatabaseConnection.class
+view\LoginView.class
+server\AgricolaServer.class
+controller\SaleController.class
+model\Product.class
+view\RegisterView.class
+server\AgricolaClient.class
+view\MainView.class
+view\ProductDialog.class
+server\AgricolaServer$ClientHandler.class
+controller\AuthController.class
+model\User.class
